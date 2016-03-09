@@ -1,0 +1,88 @@
+#!/usr/bin/python3
+# THIS IS A CODE SAMPLE.
+##############################
+# (C) 2015 Juhapekka Piiroinen
+# All Rights Reserved.
+##############################
+# Author(s):
+#   Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>
+##############################
+import shutil
+import argparse
+import os
+from pathlib import Path
+from sys import stdin
+
+def create_plugin(args):
+	pluginName = args.appName
+	uri = args.uri
+	description = args.description
+	autoload = args.autoload
+
+	pluginPath = Path(args.pluginpath + "/" + pluginName.lower())
+	templatePath = Path("templates/appsplugin")
+
+	if (pluginPath.exists()):
+		print("The plugin already exists. Cancelled.")
+		return;
+	try:
+		shutil.copytree(str(templatePath),str(pluginPath))
+	except shutil.Error as err:
+		errors.extend(err.args)
+
+	for root, dir, files in os.walk(str(pluginPath)):
+		for file in files:
+			fullFileName = root + "/" + file
+
+			# Check for reserved name in file name
+			if (file.find("###NAME###")!=-1):
+				shutil.move(fullFileName,fullFileName.replace("###NAME###",pluginName.lower()))
+
+	for root, dir, files in os.walk(str(pluginPath)):
+		for file in files:
+			fullFileName = root + "/" + file
+
+			# Replace reserved words
+			fileData = open(fullFileName,"r").read()
+			fileData = fileData.replace("###NAME###",pluginName)
+			fileData = fileData.replace("###NAME:UPPER###",pluginName.upper())
+			fileData = fileData.replace("###NAME:LOWER###",pluginName.lower())
+			fileData = fileData.replace("###NAME:CAP###",pluginName.capitalize())
+			fileData = fileData.replace("###URI###",uri)
+			fileData = fileData.replace("###DESCRIPTION###",description)
+			fileData = fileData.replace("###AUTOLOAD###",str(autoload).lower())
+			f = open(fullFileName,"w")
+			if (f):
+				f.write(fileData)
+				f.close()
+
+	features_pro = open("apps/apps.pro","a")
+	features_pro.write("\nSUBDIRS += " + pluginName)
+	features_pro.close()
+
+	print("All done! Check your features path for",pluginName,".")
+
+### main
+parser = argparse.ArgumentParser(description='Prepare a new plugin for Cute App Launcher')
+parser.add_argument('appName', help='name of the new plugin, must be a valid C++ class name.')
+parser.add_argument('description', help='The description of the plugin')
+parser.add_argument('autoload', help='Should your plugin be autoloaded or not on start.', action='store_true')
+parser.add_argument('uri', help='The uri of your plugin', nargs='?', default='fi.leetsoftware.cute')
+parser.add_argument('pluginpath', help='The location for your plugin', nargs='?', default='apps')
+
+args = parser.parse_args();
+print(args)
+print()
+print("You are about to create a new APPS plugin:")
+print("  AppName:", args.appName)
+print("  Description:", args.description)
+print("  Autoload:", args.autoload)
+print("  URI:", args.uri)
+print("  Plugin Path:", args.pluginpath)
+print()
+print("Do you want to continue (y/N)? ")
+answer = stdin.readline()
+if (answer.strip() == "y"):
+	create_plugin(args)
+else:
+	print(" /!\\ operation cancelled.")

@@ -1,0 +1,90 @@
+#!/usr/bin/python3
+# THIS IS A CODE SAMPLE.
+##############################
+# (C) 2015 Juhapekka Piiroinen
+# All Rights Reserved.
+##############################
+# Author(s):
+#   Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>
+##############################
+
+import argparse
+import json
+
+parser = argparse.ArgumentParser(description='Update generated C++ feature classes from JSON')
+parser.add_argument('pluginName', help='name of the plugin for which we are going to generate classes')
+
+args = parser.parse_args()
+f = open("features/" + args.pluginName + "/classes.json","r")
+data = f.read()
+f.close()
+
+obj = json.loads(data)
+for objClass in obj['classes']:
+	cppData = "/* This class is auto-generated from classes.json.\n DO NOT MODIFY. */\n"
+	includeData = ""
+	inheritsData = ""
+	className = objClass['name']
+	signalsData = "\tvoid dataChanged();\n"
+	functions = ""
+	members = ""
+	jsonSetters = ""
+
+	for key in objClass['inherits'].keys():
+		inherit = objClass['inherits'][key]
+		inheritsData += "{0} {1}, ".format(inherit, key)
+	inheritsData = inheritsData[:-2]
+
+	for depend in objClass['depends']:
+		includeData += "#include <{0}>\n".format(depend)
+
+	cppData += "#ifndef {0}_H\n#define {0}_H\n\n{1}\nclass {2} : {3} {{\n\tQ_OBJECT\n\n".format(className.upper(), includeData, className, inheritsData)
+	jsonSetters += "\t\tQJsonObject metaData = json.value(\"MetaData\").toObject();\n"
+	for key in objClass['properties'].keys():
+		pro = objClass['properties'][key]
+		memberType = pro['type']
+		memberName = key
+		members += "\t{0} m_{1};\n".format(memberType, memberName)
+		proData = ""
+
+		jsonSetters += "\t\tretval->set_{0}(metaData.value(\"{0}\").to".format(memberName)
+		if (memberType == "bool"):
+			jsonSetters += "Bool"
+		elif (memberType == "int"):
+			jsonSetters += "Int"
+		elif (memberType == "double"):
+			jsonSetters += "Double"
+		else:
+			jsonSetters += "String"
+		jsonSetters += "());\n"
+		signalName = "dataChanged";
+		if ('signal' in pro.keys() and pro['signal']):
+			signalName = pro['signal']
+			signalsData += "\tvoid {0}();\n".format(signalName)
+
+		if ('read' in pro.keys() and pro['read']):
+			proData += "READ {0} ".format(key)
+			functions += "\t{0} {1}() {{ return m_{1}; }}\n".format(pro['type'],key)
+		if ('write' in pro.keys() and pro['write']):
+			proData += "WRITE set_{0} ".format(key)
+			functions += "\tvoid set_{1}({0} arg_{1}) {{ m_{1} = arg_{1}; emit {2}(); }}\n".format(pro['type'],key,signalName)
+
+		functions += "\n"
+		proData += "NOTIFY {0}".format(signalName)
+
+		cppData += "\tQ_PROPERTY({0} {1} {2})\n".format(pro['type'], key, proData)
+
+	cppData += "\n"
+	cppData += "public:\n"
+	cppData += "\tstatic {0}* fromJson(QJsonObject json) {{\n\t\t{0}* retval = new {0}();\n{1}\t\treturn retval;\n\t}}\n\n".format(className,jsonSetters)
+	cppData += functions
+	cppData += "signals:\n"
+	cppData += signalsData
+	cppData += "\n"
+	cppData += "private:\n"
+	cppData += members
+	cppData += "\n}};\n#endif // {0}_H".format(className.upper())
+	
+	f = open("features/" + args.pluginName + "/{0}.h".format(className.lower()),"w")
+	f.write(cppData)
+	f.close()

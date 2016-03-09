@@ -1,0 +1,53 @@
+#!/bin/bash
+# THIS IS A CODE SAMPLE.
+##############################
+# (C) 2015 Juhapekka Piiroinen
+# All Rights Reserved.
+##############################
+# Author(s):
+#   Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>
+##############################
+
+
+TESTTYPE=$1
+REPORTTYPE=$2
+ARGS=${@:3}
+
+##############################
+# exit on error
+set -e
+
+##############################
+# prepare environment flags
+SCRIPTPATH=`dirname $0`
+SCRIPTPATH=`cd $SCRIPTPATH; pwd`
+PATH=${SCRIPTPATH}:${SCRIPTPATH}/../node_modules/.bin:${PATH}
+pushd ${SCRIPTPATH}/.. > /dev/null
+
+##############################
+# BEGIN
+##############################
+
+# prepare test result file env flag
+TESTRESULT="test-results/${TESTTYPE}.${REPORTTYPE}.xml"
+
+# check if test result file exists and delete it
+if [[ -f ${TESTRESULT} ]]; then
+ rm ${TESTRESULT}
+fi
+
+# create the test-results folder, if it does not exist
+mkdir -p test-results
+
+# prepare test command
+TESTCMD="mocha ${ARGS} --compilers coffee:coffee-script/register test/${TESTTYPE}"
+
+# check if we are running with args
+# if we have args we are more likely running via jenkins.
+# thus we will redirect stdout to test result file.
+if [[ -z "${REPORTTYPE}" ]]; then
+ $TESTCMD
+else
+ $TESTCMD -R ${REPORTTYPE} > ${TESTRESULT}
+ echo "Results are available at ${TESTRESULT}."
+fi

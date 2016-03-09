@@ -1,0 +1,43 @@
+#!/bin/bash
+# THIS IS A CODE SAMPLE.
+##############################
+# (C) 2015 Juhapekka Piiroinen
+# All Rights Reserved.
+##############################
+# Author(s):
+#   Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>
+##############################
+
+
+
+##############################
+# exit on error
+set -e
+
+##############################
+# prepare environment flags
+SCRIPTPATH=`dirname $0`
+SCRIPTPATH=`cd $SCRIPTPATH; pwd`
+PATH=${SCRIPTPATH}:${SCRIPTPATH}/../node_modules/.bin:${PATH}
+pushd ${SCRIPTPATH}/.. > /dev/null
+
+# Execute jslint
+set +e
+JSFILES=`find src test -type f | grep js$ | grep -v 3rdparty | grep -v node_modules`
+set -e
+
+if [ ! -z ${JSFILES}]; then
+  for JSON in ${JSFILES}
+  do
+    echo -n "jshint ${JSON} .. "
+    ./node_modules/.bin/jshint -c .configs/jshintrc --reporter ./node_modules/jshint-stylish/stylish.js $JSON
+    if [ $? == 0 ]; then
+      echo "OK."
+    else
+      echo "FAILED!"
+      exit 1
+    fi
+  done
+else
+  echo "* no js files in project."
+fi
