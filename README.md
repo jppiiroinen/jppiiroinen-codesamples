@@ -11,7 +11,7 @@ https://www.youtube.com/watch?v=csZp6WAiZuw
 https://code.launchpad.net/~juhapekka-piiroinen
 http://bazaar.launchpad.net/~ubuntu-sdk-team/qtcreator-plugin-ubuntu/trunk/view/head:/debian/changelog
 
-I did the initial debian packaging for the qtcreator-dev which Mirv / Timo Jyrinki then published and the whole Qt Creator for Ubuntu SDK stuff was initially maintained and created by me.
+I did the initial debian packaging for the qtcreator-dev which Qt Creator for Ubuntu SDK stuff was initially maintained and created by me.
 
 I helped them with Ubuntu UI Toolkit. You can verify that claim by looking here:
 https://code.launchpad.net/~ubuntu-sdk-team/ubuntu-ui-toolkit/trunk
