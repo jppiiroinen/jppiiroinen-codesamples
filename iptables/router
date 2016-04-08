@@ -1,0 +1,93 @@
+#/bin/bash
+##################################################################
+# The Internet Router script
+# ---------------------------------------------------------------
+# Author: Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>
+# License: GNU GPLv3 or Commercial (contact for price quote)
+#
+# (C) 2016 Juhapekka Piiroinen
+##################################################################
+set -e
+
+MODE=$1
+INTERNET=$2
+LAN=$3
+SILENT=$4
+
+function disable_firewall {
+	sudo iptables -F FORWARD
+	sudo iptables -F
+	sudo iptables -t nat -F
+	sudo iptables -X
+}
+
+function enable_firewall {
+	disable_firewall
+
+	sudo iptables -t nat -A POSTROUTING -o ${INTERNET} -j MASQUERADE
+	sudo iptables -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+	sudo iptables -A FORWARD -i ${LAN} -o ${INTERNET} -j ACCEPT	
+}
+
+function enable_ipv4_forward {
+	sudo sysctl net.ipv4.ip_forward=1 > /dev/null
+}
+
+function disable_ipv4_forward {
+	sudo sysctl net.ipv4.ip_forward=0 > /dev/null
+}
+
+if [[ -z ${SILENT} ]]; then
+	clear
+fi
+
+if [[ -z $1 ]] || [[ -z $2 ]] || [[ -z $3 ]]; then
+  echo "USAGE: ./router [enable/disable] [internet-interface] [lan-interface] [optional place for any character for silent mode]"
+  exit -1
+fi
+
+if [[ -z ${SILENT} ]]; then
+	echo
+	echo " ##################################################################"
+	echo " # The Internet Router script"
+	echo " # ---------------------------------------------------------------"
+	echo " # Author: Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>"
+	echo " # License: GNU GPLv3 or Commercial (contact for price quote)"
+	echo " #"
+	echo " # (C) 2016 Juhapekka Piiroinen"
+	echo " ##################################################################"
+	echo
+	echo " You are about to modify your kernel and Firewall."
+	echo "  - net.ipv4.forward flag is going to be modified."
+	echo "  - NAT/forward rules are going to be modified as well."
+	echo
+	echo " Your internet interface is ${INTERNET}."
+	echo " Your lan interface is ${LAN}."
+	echo
+	if [[ "${MODE}" = "enable" ]]; then
+		echo " You will ENABLE internet forwarding from ${INTERNET} to ${LAN}."
+	else
+		echo " You will DISABLE internet forwarding from ${INTERNET} to ${LAN}."
+	fi
+	echo
+	echo -n " Press <enter> to continue, or ctrl+c to cancel. "
+	read
+fi
+
+if [[ "${MODE}" = "enable" ]]; then
+	enable_ipv4_forward
+	enable_firewall
+
+	if [[ -z ${SILENT} ]]; then
+		echo
+		echo " Routing is now enabled."
+	fi
+else
+	disable_ipv4_forward
+	disable_firewall
+
+	if [[ -z ${SILENT} ]]; then
+		echo
+		echo " Routing is now disabled."
+	fi
+fi
