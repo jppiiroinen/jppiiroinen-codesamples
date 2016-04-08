@@ -1,32 +1,87 @@
 #/bin/bash
-##################################################################
-# The Internet Router script
-# ---------------------------------------------------------------
-# Author: Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>
-# License: GNU GPLv3 or Commercial (contact for price quote)
-#
-# (C) 2016 Juhapekka Piiroinen
-##################################################################
 set -e
 
+function show_header {
+	echo
+	echo " ##################################################################"
+	echo " # The Internet Router script"
+	echo " # ---------------------------------------------------------------"
+	echo " # Author: Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>"
+	echo " # License: GNU GPLv3 or Commercial (contact for price quote)"
+	echo " #"
+	echo " # (C) 2016 Juhapekka Piiroinen"
+	echo " ##################################################################"
+}
+
+#######
+# arguments
+#######
 MODE=$1
 INTERNET=$2
 LAN=$3
 SILENT=$4
 
+#######
+# internal use
+#######
+IPTABLES="sudo iptables"
+TIMESTAMP=`date +%d%m%Y-%H%M%S`
+BACKUP_FILENAME="iptables.${MODE}.${TIMESTAMP}.bak"
+
+#######
+# Clear screen if not in silent mode
+#######
+if [[ -z ${SILENT} ]]; then
+	clear
+fi
+
+#######
+# Show usage if the input was not correct
+#######
+if [[ -z ${MODE} ]] || [[ -z ${INTERNET} ]] || [[ -z ${LAN} ]]; then
+	echo "USAGE: ./router [enable/disable] [internet-interface] [lan-interface] [silent]"
+	exit -1
+fi
+
+#######
+# Helper functions
+#######
+function backup_firewall {
+	iptables-save > ${BACKUP_FILENAME}
+}
+
 function disable_firewall {
-	sudo iptables -F FORWARD
-	sudo iptables -F
-	sudo iptables -t nat -F
-	sudo iptables -X
+	${IPTABLES} -F FORWARD
+	${IPTABLES} -F INPUT
+	${IPTABLES} -F OUTPUT
+	${IPTABLES} -F
+	${IPTABLES} -t nat -F
+	${IPTABLES} -X
+	${IPTABLES} -P INPUT ACCEPT
+	${IPTABLES} -P FORWARD ACCEPT
+	${IPTABLES} -P OUTPUT ACCEPT
+	${IPTABLES} -Z
 }
 
 function enable_firewall {
 	disable_firewall
 
-	sudo iptables -t nat -A POSTROUTING -o ${INTERNET} -j MASQUERADE
-	sudo iptables -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-	sudo iptables -A FORWARD -i ${LAN} -o ${INTERNET} -j ACCEPT	
+	# drop incoming and forwarding packets
+	${IPTABLES} -P INPUT DROP
+	${IPTABLES} -P FORWARD DROP
+	${IPTABLES} -P OUTPUT ACCEPT
+	${IPTABLES} -A INPUT -i lo -j ACCEPT
+
+	# allow established sessions to receive traffic
+	${IPTABLES} -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+	# allow port 22 for SSH
+	${IPTABLES} -A INPUT -p tcp --dport ssh -j ACCEPT
+
+	# enable NAT
+	${IPTABLES} -t nat -A POSTROUTING -o ${INTERNET} -j MASQUERADE
+	${IPTABLES} -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A FORWARD -i ${LAN} -o ${INTERNET} -j ACCEPT	
 }
 
 function enable_ipv4_forward {
@@ -37,29 +92,16 @@ function disable_ipv4_forward {
 	sudo sysctl net.ipv4.ip_forward=0 > /dev/null
 }
 
+#######
+# Show a summary and ask for <enter>
+#######
 if [[ -z ${SILENT} ]]; then
-	clear
-fi
-
-if [[ -z $1 ]] || [[ -z $2 ]] || [[ -z $3 ]]; then
-	echo "USAGE: ./router [enable/disable] [internet-interface] [lan-interface] [silent]"
-	exit -1
-fi
-
-if [[ -z ${SILENT} ]]; then
-	echo
-	echo " ##################################################################"
-	echo " # The Internet Router script"
-	echo " # ---------------------------------------------------------------"
-	echo " # Author: Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>"
-	echo " # License: GNU GPLv3 or Commercial (contact for price quote)"
-	echo " #"
-	echo " # (C) 2016 Juhapekka Piiroinen"
-	echo " ##################################################################"
+	show_header
 	echo
 	echo " You are about to modify your kernel and Firewall."
 	echo "  - net.ipv4.forward flag is going to be modified."
 	echo "  - NAT/forward rules are going to be modified as well."
+	echo "  - Your existing firewall rules are going to be dropped."
 	echo
 	echo " Your internet interface is ${INTERNET}."
 	echo " Your lan interface is ${LAN}."
@@ -74,20 +116,45 @@ if [[ -z ${SILENT} ]]; then
 	read
 fi
 
+
+######
+# main
+######
 if [[ "${MODE}" = "enable" ]]; then
+	######
+	# Enable firewall and forwarding
+	######
+
+	backup_firewall
 	enable_ipv4_forward
 	enable_firewall
 
 	if [[ -z ${SILENT} ]]; then
+		clear
+		show_header
+		echo
+		echo " A backup can be found: ${BACKUP_FILENAME}"
+		echo " You can restore it with: iptables-restore < ${BACKUP_FILENAME}"
 		echo
 		echo " Routing is now enabled."
+		echo
 	fi
 else
+	######
+	# Disable firewall and forwarding
+	######
+	backup_firewall
 	disable_ipv4_forward
 	disable_firewall
 
 	if [[ -z ${SILENT} ]]; then
+		clear
+		show_header
+		echo
+		echo " A backup can be found: ${BACKUP_FILENAME}"
+		echo " You can restore it with: iptables-restore < ${BACKUP_FILENAME}"
 		echo
 		echo " Routing is now disabled."
+		echo
 	fi
 fi
