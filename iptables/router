@@ -42,8 +42,8 @@ if [[ -z ${SILENT} ]]; then
 fi
 
 if [[ -z $1 ]] || [[ -z $2 ]] || [[ -z $3 ]]; then
-  echo "USAGE: ./router [enable/disable] [internet-interface] [lan-interface] [optional place for any character for silent mode]"
-  exit -1
+	echo "USAGE: ./router [enable/disable] [internet-interface] [lan-interface] [optional place for any character for silent mode]"
+	exit -1
 fi
 
 if [[ -z ${SILENT} ]]; then
