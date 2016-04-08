@@ -1,10 +1,16 @@
 #/bin/bash
+
 set -e
 
 function show_header {
 	echo
 	echo " ##################################################################"
 	echo " # The Internet Router script"
+	echo " #"
+	echo " # -"
+	echo " # You can for example use this script to share your wifi from"
+	echo " # your laptop to your old desktop computer which only has"
+	echo " # an ethernet adapter."
 	echo " # ---------------------------------------------------------------"
 	echo " # Author: Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>"
 	echo " # License: GNU GPLv3 or Commercial (contact for price quote)"
