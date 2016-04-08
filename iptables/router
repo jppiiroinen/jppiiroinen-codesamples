@@ -1,5 +1,4 @@
 #/bin/bash
-set -e
 
 function show_header {
 	echo
@@ -21,6 +20,8 @@ function show_header {
 #######
 # arguments
 #######
+FIRST_ARG=$1
+SECOND_ARG=$2
 MODE=$1
 INTERNET=$2
 LAN=$3
@@ -31,23 +32,41 @@ SILENT=$4
 #######
 IPTABLES="sudo iptables"
 TIMESTAMP=`date +%d%m%Y-%H%M%S`
-BACKUP_FILENAME="backup/iptables.${MODE}.${TIMESTAMP}.bak"
+BACKUP_PATH="backup"
+BACKUP_FILENAME="${BACKUP_PATH}/iptables.${TIMESTAMP}.bak"
 BACKUP_DISABLE_FILE=".router.disable.backup"
+LATEST_BACKUP=${BACKUP_PATH}/`ls -lt ${BACKUP_PATH} | awk '{print $9}'|grep -v '^$'|head -n 1`
 
 #######
-# Clear screen if not in silent mode
-#######
-if [[ -z ${SILENT} ]]; then
-	clear
-fi
+# Store our Usage into variable
+read -r -d '' USAGE << EOF
+\n
+\tRouter management\n
+\n
+\t\t./router [enable/disable] [internet-interface] [lan-interface] [silent]"\n
+\n
+\tExample:\n
+\t\tThis will install required applications and configure your system.\n
+\t\t./router enable wlan0 eth0\n
+\n
+\t\tThis will then disable the routing.\n
+\t\t./router disable\n
+\n
+\tFirewall\n
+\n
+\t\t./router firewall [start/stop]\n
+EOF
 
-#######
-# Show usage if the input was not correct
-#######
-if [[ -z ${MODE} ]] || [[ -z ${INTERNET} ]] || [[ -z ${LAN} ]]; then
-	echo "USAGE: ./router [enable/disable] [internet-interface] [lan-interface] [silent]"
-	exit -1
-fi
+read -r -d '' FINEPRINT << EOF
+\n THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+\n INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+\n PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+\n FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+\n TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+\n OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n
+EOF
+
+set -e
 
 #######
 # Helper functions
@@ -56,13 +75,26 @@ function backup_firewall {
 	sudo iptables-save > ${BACKUP_FILENAME}
 }
 
+function restore_firewall_from_backup {
+	test -f ${LATEST_BACKUP} && cat ${LATEST_BACKUP} | sudo iptables-restore
+}
+
 function configure_dhcpd {
 	echo " * install and configure dhcp server for ${LAN}."
 	sudo apt-get install isc-dhcp-server -y
 	sudo mkdir -p /etc/ltsp
 	sudo cp conf/dhcpd.conf /etc/ltsp/
 	sudo sed -i s/INTERFACES=\".*\"/INTERFACES=\"${LAN}\"/g /etc/default/isc-dhcp-server
+}
+
+function start_dhcpd {
+	echo " * starting dhcpd"
 	sudo service isc-dhcp-server restart
+}
+
+function stop_dhcpd {
+	echo " * stopping dhcpd"
+	sudo service isc-dhcp-server stop
 }
 
 function log_dropped_incoming {
@@ -176,47 +208,91 @@ function disable_ipv4_forward {
 #######
 # Show a summary and ask for <enter>
 #######
-if [[ -z ${SILENT} ]]; then
-	show_header
-	echo
-	echo " You are about to:"
-	echo "  - net.ipv4.forward flag is going to be modified."
-	echo "  - NAT/forward rules are going to be modified as well."
-	echo "  - Your existing firewall rules are going to be dropped."
-	echo "  - DHCP server is going to be installed."
-	echo
-	echo " Your internet interface is ${INTERNET}."
-	echo " Your lan interface is ${LAN}."
-	echo
-	echo " Please check conf/dhcpd.conf that it has valid DNS and IP addresses."
-	echo " It will use 10.10.10.10 by default as router, which should match the ip"
-	echo " of this machine's ${LAN} interface."
-	echo
-	if [[ "${MODE}" = "enable" ]]; then
-		echo " You will ENABLE internet forwarding from ${INTERNET} to ${LAN}."
-	else
-		echo " You will DISABLE internet forwarding from ${INTERNET} to ${LAN}."
-	fi
-	echo
-	echo -n " Press <enter> to continue, or ctrl+c to cancel. "
-	read
-fi
+function show_summary {
+	if [[ -z ${SILENT} ]]; then
+		clear
+		show_header
+		echo
 
+		if [[ "${MODE}" = "enable" ]]; then
+			echo " You are about to:"
+			echo "  - net.ipv4.forward flag is going to be modified."
+			echo "  - NAT/forward rules are going to be modified as well."
+			echo "  - Your existing firewall rules are going to be dropped."
+			echo "  - DHCP server is going to be installed."
+			echo
+			echo " Your internet interface is ${INTERNET}."
+			echo " Your lan interface is ${LAN}."
+			echo
+			echo " Please check conf/dhcpd.conf that it has valid DNS and IP addresses."
+			echo " It will use 10.10.10.10 by default as router, which should match the ip"
+			echo " of this machine's ${LAN} interface."
+			echo
+			echo " You will ENABLE internet forwarding from ${INTERNET} to ${LAN}."
+		elif [[ "${MODE}" = "disable" ]]; then
+			echo " You are about to:"
+			echo " - net.ipv4.forward flag is going to be modified."
+			if [[ -f ${LATEST_BACKUP} ]]; then
+				echo " - flush and restore your firewall settings from backup."
+				echo "   Filename: ${LATEST_BACKUP}"
+			else
+				echo " - a backup was not found, so we are not going to restore firewall."
+			fi
+			echo " - your DHCP server will be stopped."
+			echo
+			echo " You will DISABLE internet forwarding."
+		elif [[ "${FIRST_ARG}" = "firewall" ]]; then
+			if [[ "${SECOND_ARG}" = "enable" ]]; then
+				echo "Firewall enable functionality is not implemented."
+				echo "THIS IS NOT IMPLEMENTED, EXITING."
+				exit 1
+			elif [[ "${SECOND_ARG}" = "disable" ]]; then
+				echo " You are about to DISABLE firewall."
+			fi
+		fi
+		echo
+		show_fineprint
+		echo
+		echo " Press <enter> to agree and continue, or ctrl+c to cancel. "
+		read
+	fi
+}
+
+function show_fineprint {
+	echo -e ${FINEPRINT}
+}
+
+function show_usage {
+	show_header
+	echo -e ${USAGE}
+	show_fineprint
+	exit -1
+}
 
 ######
 # main
 ######
-
-# take backup if it is not disabled
-test -f ${BACKUP_DISABLE_FILE} || backup_firewall
+if [[ -z ${MODE} ]]; then
+	show_usage
+fi
 
 if [[ "${MODE}" = "enable" ]]; then
+	if [[ -z ${INTERNET} ]] || [[ -z ${LAN} ]]; then
+		show_usage
+	fi
+
+	show_summary
+
+	# take backup if it is not disabled
+	test -f ${BACKUP_DISABLE_FILE} || backup_firewall
+
 	######
 	# Enable firewall and forwarding
 	######
 	enable_ipv4_forward
 	enable_firewall
 	configure_dhcpd
+	start_dhcpd
 	log_dropped_incoming
 	log_dropped_outgoing
 	log_dropped_forward
@@ -237,12 +313,18 @@ if [[ "${MODE}" = "enable" ]]; then
 		echo " Routing is now enabled."
 		echo
 	fi
-else
+elif [[ "${MODE}" = "disable" ]]; then
+	show_summary
+
 	######
 	# Disable firewall and forwarding
 	######
 	disable_ipv4_forward
 	disable_firewall
+	stop_dhcpd
+
+	# restore firewall from backup if it is not disabled
+	test -f ${BACKUP_DISABLE_FILE} || restore_firewall_from_backup
 
 	if [[ -z ${SILENT} ]]; then
 		clear
@@ -254,4 +336,16 @@ else
 		echo " Routing is now disabled."
 		echo
 	fi
+elif [[ "${FIRST_ARG}" = "firewall" ]]; then
+	if [[ "${SECOND_ARG}" = "enable" ]]; then
+		show_summary
+		enable_firewall
+	elif [[ "${SECOND_ARG}" = "disable" ]]; then
+		show_summary
+		disable_firewall
+	else
+		show_usage
+	fi
+else
+	show_usage
 fi
