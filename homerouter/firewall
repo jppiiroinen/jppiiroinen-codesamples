@@ -1,5 +1,4 @@
 #/bin/bash
-
 set -e
 
 function show_header {
@@ -32,7 +31,7 @@ SILENT=$4
 #######
 IPTABLES="sudo iptables"
 TIMESTAMP=`date +%d%m%Y-%H%M%S`
-BACKUP_FILENAME="iptables.${MODE}.${TIMESTAMP}.bak"
+BACKUP_FILENAME="backup/iptables.${MODE}.${TIMESTAMP}.bak"
 BACKUP_DISABLE_FILE=".router.disable.backup"
 
 #######
@@ -63,6 +62,9 @@ function disable_firewall {
 	${IPTABLES} -F OUTPUT
 	${IPTABLES} -F
 	${IPTABLES} -t nat -F
+	${IPTABLES} -t nat -X
+	${IPTABLES} -t mangle -F
+	${IPTABLES} -t mangle -X
 	${IPTABLES} -X
 	${IPTABLES} -P INPUT ACCEPT
 	${IPTABLES} -P FORWARD ACCEPT
@@ -71,21 +73,56 @@ function disable_firewall {
 }
 
 function enable_firewall {
+	echo
+	echo " * remove all old firewall rules"
 	disable_firewall
 
-	# drop incoming and forwarding packets
+	echo " * drop all packets by default"
 	${IPTABLES} -P INPUT DROP
 	${IPTABLES} -P FORWARD DROP
-	${IPTABLES} -P OUTPUT ACCEPT
-	${IPTABLES} -A INPUT -i lo -j ACCEPT
+	${IPTABLES} -P OUTPUT DROP
 
-	# allow established sessions to receive traffic
+	echo " * allow localhost"
+	${IPTABLES} -A INPUT -i lo -j ACCEPT
+	${IPTABLES} -A OUTPUT -o lo -j ACCEPT
+
+	echo " * allow lan"
+	${IPTABLES} -A INPUT -i ${LAN} -j ACCEPT
+	${IPTABLES} -A OUTPUT -o ${LAN} -j ACCEPT
+
+	echo " * allow established sessions to receive traffic"
 	${IPTABLES} -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
-	# allow port 22 for SSH
+	echo " * allow ssh, http and https traffic out"
+	${IPTABLES} -A OUTPUT -p tcp --dport 80 -m state --state NEW,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A INPUT -p tcp --sport 80 -m state --state ESTABLISHED
+        ${IPTABLES} -A OUTPUT -p tcp --dport 443 -m state --state NEW,ESTABLISHED -j ACCEPT
+        ${IPTABLES} -A INPUT -p tcp --sport 443 -m state --state ESTABLISHED
+        ${IPTABLES} -A OUTPUT -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
+        ${IPTABLES} -A INPUT -p tcp --sport 22 -m state --state ESTABLISHED
+
+	echo " * allow DNS lookups"
+	${IPTABLES} -A OUTPUT -p udp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A INPUT -p udp --sport 53 -m state --state ESTABLISHED -j ACCEPT
+	${IPTABLES} -A OUTPUT -p tcp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A INPUT -p tcp --sport 53 -m state --state ESTABLISHED -j ACCEPT
+
+	echo " * allow ping"
+	${IPTABLES} -A OUTPUT -p icmp -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+	${IPTABLES} -A INPUT -p icmp -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+	echo " * allow ntp"
+	${IPTABLES} -A OUTPUT -p udp --dport 123 -m state --state NEW,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A INPUT -p udp --sport 123 -m state --state ESTABLISHED -j ACCEPT
+
+	echo " * allow port 22 for SSH"
 	${IPTABLES} -A INPUT -p tcp --dport ssh -j ACCEPT
 
-	# enable NAT
+	echo " * disallow outgoing DNS and incoming DHCP for Internet port"
+	${IPTABLES} -A OUTPUT -o ${INTERNET} -p tcp --dport 53 -j DROP
+	${IPTABLES} -A OUTPUT -o ${INTERNET} -p udp --dport 67 -j DROP
+
+	echo " * enable NAT"
 	${IPTABLES} -t nat -A POSTROUTING -o ${INTERNET} -j MASQUERADE
 	${IPTABLES} -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 	${IPTABLES} -A FORWARD -i ${LAN} -o ${INTERNET} -j ACCEPT	
@@ -139,8 +176,6 @@ if [[ "${MODE}" = "enable" ]]; then
 	enable_firewall
 
 	if [[ -z ${SILENT} ]]; then
-		clear
-		show_header
 		echo
 		echo " A backup can be found: ${BACKUP_FILENAME}"
 		echo " You can restore it with: iptables-restore < ${BACKUP_FILENAME}"
