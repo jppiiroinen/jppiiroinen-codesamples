@@ -20,3 +20,5 @@ Which still shows "Created by Juhapekka Piiroinen on 2013-01-08.."
 
 Some of the bash scripts are still the ones which I created and are used by >10k users:
  - http://bazaar.launchpad.net/~ubuntu-sdk-team/qtcreator-plugin-ubuntu/trunk/files/head:/share/qtcreator/ubuntu/scripts/
+
+See related revision 44: http://bazaar.launchpad.net/~ubuntu-sdk-team/qtcreator-plugin-ubuntu/trunk/files/44
