@@ -47,7 +47,7 @@ fi
 # Helper functions
 #######
 function backup_firewall {
-	iptables-save > ${BACKUP_FILENAME}
+	sudo iptables-save > ${BACKUP_FILENAME}
 }
 
 function disable_firewall {
