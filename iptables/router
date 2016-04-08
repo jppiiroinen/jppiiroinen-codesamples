@@ -15,7 +15,7 @@ function show_header {
 	echo " # Author: Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>"
 	echo " # License: GNU GPLv3 or Commercial (contact for price quote)"
 	echo " #"
-	echo " # (C) 2016 Juhapekka Piiroinen"
+	echo " # (C) 2016 Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>"
 	echo " ##################################################################"
 }
 
