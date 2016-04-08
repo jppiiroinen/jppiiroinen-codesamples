@@ -1,1 +1,257 @@
-firewall
+#/bin/bash
+set -e
+
+function show_header {
+	echo
+	echo " ##################################################################"
+	echo " # The Internet Router script"
+	echo " #"
+	echo " # -"
+	echo " # You can for example use this script to share your wifi from"
+	echo " # your laptop to your old desktop computer which only has"
+	echo " # an ethernet adapter."
+	echo " # ---------------------------------------------------------------"
+	echo " # Author: Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>"
+	echo " # License: GNU GPLv3 or Commercial (contact for price quote)"
+	echo " #"
+	echo " # (C) 2016 Juhapekka Piiroinen <juhapekka.piiroinen@1337.fi>"
+	echo " ##################################################################"
+}
+
+#######
+# arguments
+#######
+MODE=$1
+INTERNET=$2
+LAN=$3
+SILENT=$4
+
+#######
+# internal use
+#######
+IPTABLES="sudo iptables"
+TIMESTAMP=`date +%d%m%Y-%H%M%S`
+BACKUP_FILENAME="backup/iptables.${MODE}.${TIMESTAMP}.bak"
+BACKUP_DISABLE_FILE=".router.disable.backup"
+
+#######
+# Clear screen if not in silent mode
+#######
+if [[ -z ${SILENT} ]]; then
+	clear
+fi
+
+#######
+# Show usage if the input was not correct
+#######
+if [[ -z ${MODE} ]] || [[ -z ${INTERNET} ]] || [[ -z ${LAN} ]]; then
+	echo "USAGE: ./router [enable/disable] [internet-interface] [lan-interface] [silent]"
+	exit -1
+fi
+
+#######
+# Helper functions
+#######
+function backup_firewall {
+	sudo iptables-save > ${BACKUP_FILENAME}
+}
+
+function configure_dhcpd {
+	echo " * install and configure dhcp server for ${LAN}."
+	sudo apt-get install isc-dhcp-server -y
+	sudo mkdir -p /etc/ltsp
+	sudo cp conf/dhcpd.conf /etc/ltsp/
+	sudo sed -i s/INTERFACES=\".*\"/INTERFACES=\"${LAN}\"/g /etc/default/isc-dhcp-server
+	sudo service isc-dhcp-server restart
+}
+
+function log_dropped_incoming {
+	echo " * log dropped incoming"
+	${IPTABLES} -N LOGGING
+	${IPTABLES} -A INPUT -j LOGGING
+	${IPTABLES} -A LOGGING -m limit --limit 2/min -j LOG --log-prefix "iptables input drop: " --log-level 4
+	${IPTABLES} -A LOGGING -j DROP
+}
+
+function log_dropped_outgoing {
+	echo " * log dropped outgoing"
+	${IPTABLES} -A OUTPUT -j LOGGING
+	${IPTABLES} -A LOGGING -m limit --limit 2/min -j LOG --log-prefix "iptables output drop: " --log-level 4
+	${IPTABLES} -A LOGGING -j DROP
+}
+
+function log_dropped_forward {
+	echo " * log dropped forward"
+	${IPTABLES} -A FORWARD -j LOGGING
+	${IPTABLES} -A LOGGING -m limit --limit 2/min -j LOG --log-prefix "iptables forward drop: " --log-level 4
+	${IPTABLES} -A LOGGING -j DROP
+}
+
+
+function disable_firewall {
+	${IPTABLES} -F FORWARD
+	${IPTABLES} -F INPUT
+	${IPTABLES} -F OUTPUT
+	${IPTABLES} -F
+	${IPTABLES} -t nat -F
+	${IPTABLES} -t nat -X
+	${IPTABLES} -t mangle -F
+	${IPTABLES} -t mangle -X
+	${IPTABLES} -X
+	${IPTABLES} -P INPUT ACCEPT
+	${IPTABLES} -P FORWARD ACCEPT
+	${IPTABLES} -P OUTPUT ACCEPT
+	${IPTABLES} -Z
+}
+
+function enable_firewall {
+	echo
+	echo " * remove all old firewall rules"
+	disable_firewall
+
+	echo " * drop all packets by default"
+	${IPTABLES} -P INPUT DROP
+	${IPTABLES} -P FORWARD DROP
+	${IPTABLES} -P OUTPUT DROP
+
+	echo " * allow localhost"
+	${IPTABLES} -A INPUT -i lo -j ACCEPT
+	${IPTABLES} -A OUTPUT -o lo -j ACCEPT
+
+	echo " * allow lan"
+	${IPTABLES} -A INPUT -i ${LAN} -j ACCEPT
+	${IPTABLES} -A OUTPUT -o ${LAN} -j ACCEPT
+
+	echo " * allow established sessions to receive traffic"
+	${IPTABLES} -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+	echo " * allow ssh, http and https traffic out"
+	${IPTABLES} -A OUTPUT -p tcp --dport 80 -m state --state NEW,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A INPUT -p tcp --sport 80 -m state --state ESTABLISHED
+	${IPTABLES} -A OUTPUT -p tcp --dport 443 -m state --state NEW,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A INPUT -p tcp --sport 443 -m state --state ESTABLISHED
+	${IPTABLES} -A OUTPUT -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A INPUT -p tcp --sport 22 -m state --state ESTABLISHED
+
+	echo " * allow DNS lookups"
+	${IPTABLES} -A OUTPUT -p udp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A INPUT -p udp --sport 53 -m state --state ESTABLISHED -j ACCEPT
+	${IPTABLES} -A OUTPUT -p tcp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A INPUT -p tcp --sport 53 -m state --state ESTABLISHED -j ACCEPT
+
+	echo " * allow ping"
+	${IPTABLES} -A OUTPUT -p icmp -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+	${IPTABLES} -A INPUT -p icmp -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+	echo " * allow ntp"
+	${IPTABLES} -A OUTPUT -p udp --dport 123 -m state --state NEW,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A INPUT -p udp --sport 123 -m state --state ESTABLISHED -j ACCEPT
+
+	echo " * allow port 22 for SSH"
+	${IPTABLES} -A INPUT -p tcp --dport ssh -j ACCEPT
+
+	echo " * disallow outgoing DNS and incoming DHCP for Internet port"
+	${IPTABLES} -A OUTPUT -o ${INTERNET} -p tcp --dport 53 -j DROP
+	${IPTABLES} -A OUTPUT -o ${INTERNET} -p udp --dport 67 -j DROP
+
+	echo " * enable NAT"
+	${IPTABLES} -A INPUT -i ${LAN} -j ACCEPT
+	${IPTABLES} -A OUTPUT -o ${LAN} -j ACCEPT
+	${IPTABLES} -A FORWARD -i ${LAN} -j ACCEPT
+	${IPTABLES} -A FORWARD -o ${LAN} -j ACCEPT
+
+	${IPTABLES} -t nat -A POSTROUTING -o ${INTERNET} -j MASQUERADE
+	${IPTABLES} -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+	${IPTABLES} -A FORWARD -i ${LAN} -o ${INTERNET} -j ACCEPT
+}
+
+function enable_ipv4_forward {
+	sudo sysctl net.ipv4.ip_forward=1 > /dev/null
+}
+
+function disable_ipv4_forward {
+	sudo sysctl net.ipv4.ip_forward=0 > /dev/null
+}
+
+#######
+# Show a summary and ask for <enter>
+#######
+if [[ -z ${SILENT} ]]; then
+	show_header
+	echo
+	echo " You are about to:"
+	echo "  - net.ipv4.forward flag is going to be modified."
+	echo "  - NAT/forward rules are going to be modified as well."
+	echo "  - Your existing firewall rules are going to be dropped."
+	echo "  - DHCP server is going to be installed."
+	echo
+	echo " Your internet interface is ${INTERNET}."
+	echo " Your lan interface is ${LAN}."
+	echo
+	echo " Please check conf/dhcpd.conf that it has valid DNS and IP addresses."
+	echo " It will use 10.10.10.10 by default as router, which should match the ip"
+	echo " of this machine's ${LAN} interface."
+	echo
+	if [[ "${MODE}" = "enable" ]]; then
+		echo " You will ENABLE internet forwarding from ${INTERNET} to ${LAN}."
+	else
+		echo " You will DISABLE internet forwarding from ${INTERNET} to ${LAN}."
+	fi
+	echo
+	echo -n " Press <enter> to continue, or ctrl+c to cancel. "
+	read
+fi
+
+
+######
+# main
+######
+
+# take backup if it is not disabled
+test -f ${BACKUP_DISABLE_FILE} || backup_firewall
+
+if [[ "${MODE}" = "enable" ]]; then
+	######
+	# Enable firewall and forwarding
+	######
+	enable_ipv4_forward
+	enable_firewall
+	configure_dhcpd
+	log_dropped_incoming
+	log_dropped_outgoing
+	log_dropped_forward
+
+	######
+	# Make sure that route table is correct
+	######
+	echo " * setup route table"
+	set +e
+	sudo route del default ${LAN} &> /dev/null
+	set -e
+
+	if [[ -z ${SILENT} ]]; then
+		echo
+		echo " A backup can be found: ${BACKUP_FILENAME}"
+		echo " You can restore it with: iptables-restore < ${BACKUP_FILENAME}"
+		echo
+		echo " Routing is now enabled."
+		echo
+	fi
+else
+	######
+	# Disable firewall and forwarding
+	######
+	disable_ipv4_forward
+	disable_firewall
+
+	if [[ -z ${SILENT} ]]; then
+		clear
+		show_header
+		echo
+		echo " A backup can be found: ${BACKUP_FILENAME}"
+		echo " You can restore it with: iptables-restore < ${BACKUP_FILENAME}"
+		echo
+		echo " Routing is now disabled."
+		echo
+	fi
+fi
