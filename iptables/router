@@ -27,6 +27,7 @@ SILENT=$4
 IPTABLES="sudo iptables"
 TIMESTAMP=`date +%d%m%Y-%H%M%S`
 BACKUP_FILENAME="iptables.${MODE}.${TIMESTAMP}.bak"
+BACKUP_DISABLE_FILE=".router.disable.backup"
 
 #######
 # Clear screen if not in silent mode
@@ -120,12 +121,14 @@ fi
 ######
 # main
 ######
+
+# take backup if it is not disabled
+test -f ${BACKUP_DISABLE_FILE} || backup_firewall
+
 if [[ "${MODE}" = "enable" ]]; then
 	######
 	# Enable firewall and forwarding
 	######
-
-	backup_firewall
 	enable_ipv4_forward
 	enable_firewall
 
@@ -143,7 +146,6 @@ else
 	######
 	# Disable firewall and forwarding
 	######
-	backup_firewall
 	disable_ipv4_forward
 	disable_firewall
 
