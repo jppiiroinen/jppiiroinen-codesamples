@@ -1,0 +1,11 @@
+$ ./weather.py --place Helsinki,fi London,uk
+
+        Helsinki, fi
+
+        Today is temperature is 2.9 Celsius and Clear. You could define it as clear sky.
+        
+
+        London, uk
+
+        Today is temperature is 7.77 Celsius and Drizzle. You could define it as light intensity drizzle rain.
+
