@@ -1,6 +1,6 @@
 # portfolio
 A code samples / portfolio by Juhapekka Piiroinen
-http://www.linkedin.com/in/jppiiroinen
+ - http://www.linkedin.com/in/jppiiroinen
 
 ## Other references
 
@@ -9,14 +9,14 @@ http://www.linkedin.com/in/jppiiroinen
 There has been multiple contributions to cutedriver project.
 
 See following repositories for details:
-https://github.com/nomovok-opensource/cutedriver-examples
-https://github.com/nomovok-opensource/cutedriver-agent_qt
-https://github.com/nomovok-opensource/cutedriver-driver
+ - https://github.com/nomovok-opensource/cutedriver-examples
+ - https://github.com/nomovok-opensource/cutedriver-agent_qt
+ - https://github.com/nomovok-opensource/cutedriver-driver
 
 ### Videos
 Here are some UIs of some apps for Ubuntu Linux which I have created myself:
-https://www.youtube.com/watch?v=PaxdXjHaa-o
-https://www.youtube.com/watch?v=csZp6WAiZuw
+ - https://www.youtube.com/watch?v=PaxdXjHaa-o
+ - https://www.youtube.com/watch?v=csZp6WAiZuw
 
 ### Launchpad.net
  - https://code.launchpad.net/~juhapekka-piiroinen
