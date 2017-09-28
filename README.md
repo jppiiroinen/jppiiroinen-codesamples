@@ -3,6 +3,12 @@ A code samples / portfolio by Juhapekka Piiroinen
  - http://www.linkedin.com/in/jppiiroinen
 
 ## Other references
+### PixelMaze
+I have created a game using Swift and SpriteKit for Apple iOS.
+ - https://itunes.apple.com/fi/app/pixelmaze/id1252617787?mt=8
+
+It was a game development entry for Assembly Summer 2017, 10th place.
+ - http://archive.assembly.org/2017/gamedev/pixelmaze-by-juhapekka-piiroinen
 
 ### CuteDriver
 
