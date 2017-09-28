@@ -3,9 +3,6 @@ A code samples / portfolio by Juhapekka Piiroinen
 
 ## Other references
 
-### Web apps
-https://naamakirja.com
-
 ### Videos
 Here are some UIs of some apps for Ubuntu Linux which I have created myself:
 https://www.youtube.com/watch?v=PaxdXjHaa-o
